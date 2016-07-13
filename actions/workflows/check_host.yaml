@@ -1,0 +1,64 @@
+---
+version: '2.0'
+
+m6.check_host:
+  input:
+    - ip_to_check
+    - host_to_check
+    - vdx_ip_to_check
+    - rbridge
+    - interface
+    - arp_interface
+  tasks:
+    ping_interface:
+      # [175, 230]
+      publish:
+        ping_percentage: <% task(ping_interface).result[$.host_to_check].stdout %>
+      action: core.remote username="laszlo" password="j15j234R" hosts="<% $.host_to_check %>" cmd="export LOSS=$(ping -c 5 -q <% $.ip_to_check %> | grep -oP '\d+(?=% packet loss)'); echo $[100 - $LOSS]"
+      on-success:
+        - check_threshold
+      on-error:
+        - indicate_failure
+    ARPing:
+      # [245, 128]
+      action: core.remote cmd="arping -c1 <% $.ip_to_check %> -I <% $.arp_interface %>" hosts="<% $.host_to_check%>" username="laszlo" password="j15j234R"
+
+      on-success:
+        - ping_interface
+      on-error:
+        - indicate_failure
+    check_threshold:
+      # [105, 332]
+      action: core.local
+      input:
+        cmd: "if [ \"<% $.ping_percentage %>\" -lt \"50\" ]; then exit 1; fi"
+
+      on-success:
+        - send_report
+      on-error:
+        - indicate_failure
+    check_interface:
+      # [315, 26]
+      publish:
+        check_status: "success"
+      action: core.local cmd="export RBRIDGE='<% $.rbridge %>' && export INTERFACE='<% $.interface %>' && export HOST='<% $.vdx_ip_to_check  %>' && /usr/libexec/rancid/clogin -u admin -p password -autoenable -c \"show int $INTERFACE | | i \"line protocol\";exit\" $HOST | grep \"up (connected)\""
+      on-success:
+        - ARPing
+
+      on-error:
+        - indicate_failure
+    send_report:
+      # [245, 536]
+      action: core.sendmail
+      input:
+        to: "laszlo@ams-ix.net"
+        subject: "Host check: <% $.ip_to_check %> - <% $.check_status %>"
+        body: "Host check: <% $.ip_to_check %> - <% $.check_status %>"
+
+    indicate_failure:
+      # [365, 434]
+      action: core.noop
+      publish:
+        check_status: "failure"
+      on-success:
+        - send_report
