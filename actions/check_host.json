@@ -3,7 +3,7 @@
 "runner_type": "mistral-v2",
 "tags": [],
 "enabled": true,
-"pack": "m6",
+"pack": "ss-day2",
 "entry_point": "workflows/check_host.yaml",
 "notify": {},
 "parameters": {
